@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Memory Game - Learn English</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app-container">
+    <header class="header">
+        <div class="header-main">
+            <button id="menu-toggle" class="menu-btn">☰</button>
+            <h1>MEMORY</h1>
+            <div class="header-stats">
+                <div class="mini-stat">⏰ <span id="timer">00:00</span></div>
+                <div class="mini-stat">🔄 <span id="moves">0</span></div>
+            </div>
+            <button id="help-btn" class="help-btn">?</button>
+        </div>
+
+        <nav id="side-menu" class="side-menu">
+            <div class="menu-overlay" id="menu-overlay"></div>
+            <div class="menu-drawer">
+                <div class="menu-header">
+                    <span class="menu-title">MENÚ</span>
+                    <button id="menu-close" class="close-btn">×</button>
+                </div>
+                
+                <div class="menu-scroll-area">
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-target="cat-nav">
+                            CATEGORÍAS <span class="arrow">▼</span>
+                        </button>
+                        <div id="cat-nav" class="accordion-content nav-categories"></div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-target="score-panel">
+                            MIS RÉCORDS <span class="arrow">▼</span>
+                        </button>
+                        <div id="score-panel" class="accordion-content score-list"></div>
+                    </div>
+                </div>
+
+                <div class="menu-footer">
+                    <button id="reset-panel-btn" class="btn-action secondary">LIMPIAR NIVEL</button>
+                    <button id="reset-all-btn" class="btn-action danger">RESETEAR TODO</button>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="game-area" id="main-area">
+        <div id="game-board" class="board-grid"></div>
+        <div id="global-shine"></div>
+        <div id="sparkles-container"></div>
+
+        <div id="modal-overlay" class="modal-overlay">
+            <div id="modal-content" class="modal-content"></div>
+        </div>
+    </main>
+
+    <footer class="footer-bar">
+        <div class="progress-wrapper">
+            <div class="progress-info">
+                <span id="feedback-text">¡Comienza!</span>
+                <span id="pairs-count">0 / 0</span>
+            </div>
+            <div class="progress-track">
+                <div id="progress-bar" class="progress-fill"></div>
+            </div>
+        </div>
+    </footer>
+</div>
+
+<script type="module" src="script.js"></script>
+</body>
+</html>
