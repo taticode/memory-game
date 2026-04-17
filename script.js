@@ -98,7 +98,7 @@ function loadNew(cat) {
     
     totalPairs = deck.length / 2;
     dom.pairsCount.textContent = `0/${totalPairs}`;
-    dom.feedbackText.textContent = "¡Busca!";
+    dom.feedbackText.textContent = "Parejas";
     renderBoard(deck, false);
 }
 
@@ -210,9 +210,9 @@ function showPopup(type) {
     if (type === 'victory') {
         dom.modalBody.innerHTML = `<h3>🏆 ¡GENIAL!</h3><p>Nivel ${currentCategory} completado.</p><button class="btn-action secondary" style="width:100%;margin-top:10px" onclick="location.reload()">SIGUIENTE</button>`;
     } else if (type === 'tutorial') {
-        dom.modalBody.innerHTML = `<div class="modal-flex"><div class="modal-mascot-side"><div class="modal-speech">Hello!</div><img src="./assets/img/jirafa.png" class="modal-mascot-img"></div><div class="modal-text-side"><h4>¿Cómo jugar?</h4><p style="font-size:0.6rem">Empareja inglés/español. ¡Sin scroll!</p></div></div><button class="btn-action secondary" style="width:100%; margin-top: 10px;" onclick="document.getElementById('modal-overlay').classList.remove('active')">¡VAMOS!</button>`;
+        dom.modalBody.innerHTML = `<div class="modal-flex"><div class="modal-mascot-side"><div class="modal-speech">Hello!</div><img src="./assets/img/jirafa.png" class="modal-mascot-img"></div><div class="modal-text-side"><h4>¿Cómo jugar?</h4><p style="font-size:0.6rem">Encuentra la pareja en inglés de cada carta</p></div></div><button class="btn-action secondary" style="width:100%; margin-top: 10px;" onclick="document.getElementById('modal-overlay').classList.remove('active')">¡VAMOS!</button>`;
     } else if (type === 'confirmReset') {
-        dom.modalBody.innerHTML = `<h3>¿BORRAR?</h3><div style="display:flex;gap:10px;margin-top:10px"><button class="btn-action danger" id="btn-yes-all">SÍ</button><button class="btn-action secondary" onclick="document.getElementById('modal-overlay').classList.remove('active')">NO</button></div>`;
+        dom.modalBody.innerHTML = `<h3>¿Seguro que quieres borrar todos tus records y empezar de nuevo todos los paneles?</h3><div style="display:flex;gap:10px;margin-top:10px"><button class="btn-action danger" id="btn-yes-all">SÍ</button><button class="btn-action secondary" onclick="document.getElementById('modal-overlay').classList.remove('active')">NO</button></div>`;
         document.getElementById('btn-yes-all').onclick = () => { localStorage.clear(); location.reload(); };
     }
     dom.modal.classList.add('active');
