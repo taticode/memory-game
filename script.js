@@ -37,6 +37,11 @@ const dom = {
 
 function init(category) {
     currentCategory = category;
+    
+    // Actualiza la clase del tablero para el fondo SVG
+    // 'board-grid' es la clase base, 'category' añade la específica (ej: animales)
+    dom.board.className = `board-grid ${category}`;
+
     flippedCards = [];
     lock = false;
     matches = 0;
@@ -121,7 +126,15 @@ function renderBoard(deck, isDone) {
 }
 
 function handleCardClick(card, id) {
-    if (lock || card.classList.contains('flipped')) return;
+    if (lock || card.classList.contains('flipped')) {
+        if (!card.classList.contains('matched')) {
+            card.classList.remove('shake');
+            void card.offsetWidth;
+            card.classList.add('shake');
+            card.addEventListener('animationend', () => card.classList.remove('shake'), { once: true });
+        }
+        return;
+    }
     if (!interval) startTimer();
 
     card.classList.add('flipped');
