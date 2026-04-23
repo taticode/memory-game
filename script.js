@@ -131,11 +131,11 @@ function renderBoard(deck, isDone) {
         const inner = el('div', null, 'card-inner');
         const front = el('div', null, `card-face card-front ${data.type}`);
         const back = el('div', null, 'card-face card-back');
-        
+        const imgWrapper = el('div', null, 'img-wrapper');
         const img = el('img'); img.src = data.img; img.className = 'icon-img';
         const txt = el('div', data.text, 'word-text');
-        
-        front.append(img, txt);
+        imgWrapper.appendChild(img);
+        front.append(imgWrapper, txt);
         inner.append(back, front);
         card.appendChild(inner);
 
@@ -232,14 +232,49 @@ function closeSideMenu() { dom.sideMenu.classList.remove('active'); dom.menuOver
 
 function showPopup(type) {
     dom.modalBody.innerHTML = '';
-    const btn = el('button', '¡VAMOS!', 'btn-action secondary');
-    btn.onclick = () => dom.modal.classList.remove('active');
     
     if (type === 'victory') {
-        dom.modalBody.append(el('h3', '🏆 ¡GANASTE!'), el('p', 'Nivel completado con éxito.'), btn);
+        // 1. Contenedor de la imagen (Jirafa)
+        const imgWrapper = el('div', null, 'modal-image-container');
+        const img = el('img');
+        img.src = "./assets/img/jirafa.png"; 
+        img.alt = "Jirafa celebrando";
+        imgWrapper.appendChild(img);
+
+        // 2. Títulos
+        const title = el('h2', '¡GENIAL!', 'modal-title');
+        const subtitle = el('p', 'Has completado el nivel', 'modal-subtitle');
+
+        // 3. Estadísticas del panel terminado
+        const statsRow = el('div', null, 'modal-stats-row');
+        
+        const timeStat = el('div', null, 'modal-stat-item');
+        timeStat.append(el('span', 'TIEMPO', 'stat-label'), el('span', dom.timerDisplay.textContent, 'stat-value'));
+        
+        const movesStat = el('div', null, 'modal-stat-item');
+        movesStat.append(el('span', 'PASOS', 'stat-label'), el('span', State.moves.toString(), 'stat-value'));
+        
+        statsRow.append(timeStat, movesStat);
+
+        // 4. Botón de acción
+        const nextBtn = el('button', 'SIGUIENTE NIVEL', 'btn-action primary');
+        nextBtn.onclick = () => {
+            dom.modal.classList.remove('active');
+            openSideMenu(); // Sugerimos elegir otro nivel
+        };
+
+        dom.modalBody.append(imgWrapper, title, subtitle, statsRow, nextBtn);
+        
     } else {
-        dom.modalBody.append(el('h4', 'TUTORIAL'), el('p', 'Une las parejas de inglés y español.'), btn);
+        // Modal de Tutorial (Simple)
+        dom.modalBody.append(
+            el('h4', '¿CÓMO JUGAR?', 'modal-title-small'),
+            el('p', 'Encuentra las parejas relacionando la palabra en inglés con su traducción al español.', 'modal-text'),
+            el('button', '¡ENTENDIDO!', 'btn-action secondary')
+        );
+        dom.modalBody.querySelector('button').onclick = () => dom.modal.classList.remove('active');
     }
+
     dom.modal.classList.add('active');
 }
 
@@ -272,5 +307,11 @@ function bindEvents() {
         };
     });
 }
+
+// EXPOSICIÓN MANUAL: Esto saca la función al exterior
+window.debugWin = () => showPopup('victory');
+
+// Auto-ejecución al cargar para no tener que escribir nada
+setTimeout(() => window.debugWin(), 500);
 
 bootstrap();
