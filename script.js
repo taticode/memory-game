@@ -1,5 +1,6 @@
 import { gameState } from './data.js';
 
+/* ─── CONFIG ──────────────────────────────────────────────────────────────── */
 const CONFIG = Object.freeze({
     defaultCategory: 'animales',
     pairsPerGame: 18,
@@ -8,6 +9,7 @@ const CONFIG = Object.freeze({
     categoryColors: { animales: '#f14343', vegetales: '#22ac0a', comida: '#ff8800', eventos: '#ff00ff', colegio: '#2196f3' }
 });
 
+/* ─── STATE ───────────────────────────────────────────────────────────────── */
 const State = {
     flippedCards: [], moves: 0, timer: 0, interval: null, lock: false, matches: 0,
     currentCategory: CONFIG.defaultCategory, totalPairs: 0, history: {}, decks: {}, 
@@ -15,6 +17,7 @@ const State = {
     voices: { english: null, spanish: null }
 };
 
+/* ─── DOM ────────────────────────────────────────────────────────────────── */
 const dom = {
     board: document.getElementById('game-board'),
     catNav: document.getElementById('cat-nav'),
@@ -30,59 +33,47 @@ const dom = {
     menuToggle: document.getElementById('menu-toggle'),
     menuClose: document.getElementById('menu-close'),
     menuOverlay: document.getElementById('menu-overlay'),
-    resetPanel: document.getElementById('reset-panel-btn'),
     resetAll: document.getElementById('reset-all-btn'),
     helpBtn: document.getElementById('help-btn'),
-    soundToggle: document.getElementById('sound-toggle'),
-    shine: document.getElementById('global-shine'),
-    sparkles: document.getElementById('sparkles-container')
+    soundToggle: document.getElementById('sound-toggle')
 };
 
-/* ─── VOZ (SOLUCIÓN AL DELAY) ────────────────────────────────────────────── */
-function initVoices() {
-    const load = () => {
-        const v = window.speechSynthesis.getVoices();
-        if (v.length > 0) {
-            // Prioridad a voces locales para evitar latencia de red
-            State.voices.english = v.find(x => (x.lang === 'en-US' || x.lang === 'en_US') && !x.localService) || 
-                                   v.find(x => x.lang.startsWith('en'));
-            State.voices.spanish = v.find(x => (x.lang === 'es-ES' || x.lang === 'es_ES') && !x.localService) || 
-                                   v.find(x => x.lang.startsWith('es'));
-        }
-    };
-
-    load();
-    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = load;
-    }
-    // Re-intento por si el navegador es lento cargando el catálogo
-    setTimeout(load, 1000);
-}
-
-function speak(text, type) {
-    if (State.isMuted || !window.speechSynthesis) return;
-    
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voice = type === 'english' ? State.voices.english : State.voices.spanish;
-    
-    if (voice) utterance.voice = voice;
-    utterance.lang = type === 'english' ? 'en-US' : 'es-ES';
-    utterance.rate = 1.0;
-    
-    window.speechSynthesis.speak(utterance);
-}
-
-/* ─── JUEGO ──────────────────────────────────────────────────────────────── */
+/* ─── BOOTSTRAP ──────────────────────────────────────────────────────────── */
 function bootstrap() {
-    State.history = JSON.parse(localStorage.getItem(CONFIG.storage.history) || '{}');
+    const savedHistory = localStorage.getItem(CONFIG.storage.history);
+    State.history = savedHistory ? JSON.parse(savedHistory) : {};
     State.decks = JSON.parse(localStorage.getItem(CONFIG.storage.decks) || '{}');
     State.tutorialSeen = localStorage.getItem(CONFIG.storage.tutorial) === 'true';
+    
     bindEvents();
     initVoices();
     init(CONFIG.defaultCategory);
 }
 
+/* ─── LÓGICA DE VOZ ──────────────────────────────────────────────────────── */
+function initVoices() {
+    const load = () => {
+        const v = window.speechSynthesis.getVoices();
+        if (v.length > 0) {
+            State.voices.english = v.find(x => x.lang.startsWith('en'));
+            State.voices.spanish = v.find(x => x.lang.startsWith('es'));
+        }
+    };
+    load();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) window.speechSynthesis.onvoiceschanged = load;
+}
+
+function speak(t, lang) {
+    if (State.isMuted || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const ut = new SpeechSynthesisUtterance(t);
+    const v = lang === 'english' ? State.voices.english : State.voices.spanish;
+    if (v) ut.voice = v;
+    ut.lang = lang === 'english' ? 'en-US' : 'es-ES';
+    window.speechSynthesis.speak(ut);
+}
+
+/* ─── CORE JUEGO ─────────────────────────────────────────────────────────── */
 function init(category) {
     State.currentCategory = category;
     State.flippedCards = []; State.lock = false; State.matches = 0;
@@ -92,6 +83,7 @@ function init(category) {
     dom.board.className = `board-grid ${category}`;
     closeSideMenu();
     updateMenuData();
+    renderStats();
     
     if (State.history[category]) loadCompleted(category);
     else loadNew(category);
@@ -112,7 +104,6 @@ function loadNew(cat) {
     }
     State.totalPairs = deck.length / 2;
     renderBoard(deck, false);
-    renderStats();
     setProgress(0, 0, State.totalPairs);
 }
 
@@ -133,65 +124,90 @@ function renderBoard(deck, isDone) {
         const back = el('div', null, 'card-face card-back');
         const imgWrapper = el('div', null, 'img-wrapper');
         const img = el('img'); img.src = data.img; img.className = 'icon-img';
-        const txt = el('div', data.text, 'word-text');
         imgWrapper.appendChild(img);
-        front.append(imgWrapper, txt);
+        front.append(imgWrapper, el('div', data.text, 'word-text'));
         inner.append(back, front);
         card.appendChild(inner);
-
         card.onclick = () => handleCardClick(card, data);
         dom.board.appendChild(card);
     });
 }
 
 function handleCardClick(card, data) {
-    if (card.classList.contains('matched') || card.classList.contains('flipped')) {
-        speak(data.text, data.type);
-        return;
-    }
-    if (State.lock) return;
-
+    if (card.classList.contains('matched') || card.classList.contains('flipped') || State.lock) return;
     if (!State.interval) startTimer();
-    
     speak(data.text, data.type);
     card.classList.add('flipped');
     State.flippedCards.push({ card, id: data.id });
-
     if (State.flippedCards.length === 2) {
-        State.lock = true;
-        State.moves++;
-        renderStats();
-        checkMatch();
+        State.lock = true; State.moves++; renderStats(); checkMatch();
     }
 }
 
 function checkMatch() {
     const [c1, c2] = State.flippedCards;
     if (c1.id === c2.id) {
-        c1.card.classList.add('matched');
-        c2.card.classList.add('matched');
-        State.matches++;
-        State.flippedCards = [];
-        State.lock = false;
-        const pct = (State.matches / State.totalPairs) * 100;
-        setProgress(pct, State.matches, State.totalPairs);
+        [c1.card, c2.card].forEach(c => c.classList.add('matched'));
+        State.matches++; State.flippedCards = []; State.lock = false;
+        setProgress((State.matches / State.totalPairs) * 100, State.matches, State.totalPairs);
         if (State.matches === State.totalPairs) handleWin();
     } else {
         setTimeout(() => {
-            c1.card.classList.remove('flipped');
-            c2.card.classList.remove('flipped');
-            State.flippedCards = [];
-            State.lock = false;
+            [c1.card, c2.card].forEach(c => c.classList.remove('flipped'));
+            State.flippedCards = []; State.lock = false;
         }, CONFIG.flipDelay);
     }
 }
 
+/* ─── VICTORIA Y GUARDADO ───────────────────────────────────────────────── */
 function handleWin() {
     clearInterval(State.interval);
-    State.history[State.currentCategory] = { moves: State.moves, timer: State.timer, totalPairs: State.totalPairs };
+    
+    // Guardamos el récord con la ruta local restaurada
+    State.history[State.currentCategory] = { 
+        moves: State.moves, 
+        timer: State.timer, 
+        totalPairs: State.totalPairs,
+        timeStr: dom.timerDisplay.textContent
+    };
+    
     localStorage.setItem(CONFIG.storage.history, JSON.stringify(State.history));
-    fireConfetti();
+    
+    if (window.confetti) confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+    updateMenuData();
     showPopup('victory');
+}
+
+function showPopup(type) {
+    dom.modalBody.innerHTML = '';
+    if (type === 'victory') {
+        const imgCont = el('div', null, 'modal-image-container');
+        const img = el('img'); 
+        img.src = "./assets/img/jirafa.png"; // RUTA RESTAURADA
+        imgCont.appendChild(img);
+
+        const statsRow = el('div', null, 'modal-stats-row');
+        statsRow.append(
+            createStatItem('TIEMPO', dom.timerDisplay.textContent),
+            createStatItem('PASOS', State.moves.toString())
+        );
+
+        const btn = el('button', 'SIGUIENTE NIVEL', 'btn-action primary');
+        btn.onclick = () => { dom.modal.classList.remove('active'); openSideMenu(); };
+
+        dom.modalBody.append(imgCont, el('h2', '¡GENIAL!', 'modal-title'), el('p', 'Nivel completado', 'modal-subtitle'), statsRow, btn);
+    } else {
+        const btn = el('button', '¡VAMOS!', 'btn-action secondary');
+        btn.onclick = () => dom.modal.classList.remove('active');
+        dom.modalBody.append(el('h4', 'TUTORIAL', 'modal-title-small'), el('p', 'Une las parejas de inglés y español.', 'modal-text'), btn);
+    }
+    dom.modal.classList.add('active');
+}
+
+function createStatItem(label, value) {
+    const item = el('div', null, 'modal-stat-item');
+    item.append(el('span', label, 'stat-label'), el('span', value, 'stat-value'));
+    return item;
 }
 
 /* ─── UI HELPERS ────────────────────────────────────────────────────────── */
@@ -216,89 +232,52 @@ function renderStats() {
     dom.movesDisplay.textContent = State.moves;
 }
 
+function updateRecordsList() {
+    dom.scorePanel.innerHTML = '';
+    const records = Object.entries(State.history);
+    
+    if (records.length === 0) {
+        dom.scorePanel.innerHTML = '<p class="empty-msg">Aún no tienes récords</p>';
+        return;
+    }
+
+    records.forEach(([cat, data]) => {
+        const row = el('div', null, 'score-row');
+        row.innerHTML = `
+            <span class="score-cat">${cat}</span>
+            <span class="score-data">⏱ ${data.timeStr} | 👟 ${data.moves}</span>
+        `;
+        dom.scorePanel.appendChild(row);
+    });
+}
+
 function updateMenuData() {
     dom.catNav.innerHTML = '';
     gameState.categoriasNames.forEach(name => {
-        const isComp = !!State.history[name];
-        const btn = el('button', name.toUpperCase() + (isComp ? ' ✓' : ''), `btn-cat${isComp ? ' completed' : ''}`);
+        const record = State.history[name];
+        const btn = el('button', name.toUpperCase() + (record ? ' ✓' : ''), `btn-cat${record ? ' completed' : ''}`);
         btn.style.backgroundColor = CONFIG.categoryColors[name];
         btn.onclick = () => init(name);
         dom.catNav.appendChild(btn);
     });
-}
-
-function openSideMenu() { dom.sideMenu.classList.add('active'); dom.menuOverlay.style.display = 'block'; }
-function closeSideMenu() { dom.sideMenu.classList.remove('active'); dom.menuOverlay.style.display = 'none'; }
-
-function showPopup(type) {
-    dom.modalBody.innerHTML = '';
     
-    if (type === 'victory') {
-        // 1. Contenedor de la imagen (Jirafa)
-        const imgWrapper = el('div', null, 'modal-image-container');
-        const img = el('img');
-        img.src = "./assets/img/jirafa.png"; 
-        img.alt = "Jirafa celebrando";
-        imgWrapper.appendChild(img);
-
-        // 2. Títulos
-        const title = el('h2', '¡GENIAL!', 'modal-title');
-        const subtitle = el('p', 'Has completado el nivel', 'modal-subtitle');
-
-        // 3. Estadísticas del panel terminado
-        const statsRow = el('div', null, 'modal-stats-row');
-        
-        const timeStat = el('div', null, 'modal-stat-item');
-        timeStat.append(el('span', 'TIEMPO', 'stat-label'), el('span', dom.timerDisplay.textContent, 'stat-value'));
-        
-        const movesStat = el('div', null, 'modal-stat-item');
-        movesStat.append(el('span', 'PASOS', 'stat-label'), el('span', State.moves.toString(), 'stat-value'));
-        
-        statsRow.append(timeStat, movesStat);
-
-        // 4. Botón de acción
-        const nextBtn = el('button', 'SIGUIENTE NIVEL', 'btn-action primary');
-        nextBtn.onclick = () => {
-            dom.modal.classList.remove('active');
-            openSideMenu(); // Sugerimos elegir otro nivel
-        };
-
-        dom.modalBody.append(imgWrapper, title, subtitle, statsRow, nextBtn);
-        
-    } else {
-        // Modal de Tutorial (Simple)
-        dom.modalBody.append(
-            el('h4', '¿CÓMO JUGAR?', 'modal-title-small'),
-            el('p', 'Encuentra las parejas relacionando la palabra en inglés con su traducción al español.', 'modal-text'),
-            el('button', '¡ENTENDIDO!', 'btn-action secondary')
-        );
-        dom.modalBody.querySelector('button').onclick = () => dom.modal.classList.remove('active');
-    }
-
-    dom.modal.classList.add('active');
+    updateRecordsList(); 
 }
 
-function fireConfetti() { confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } }); }
+function openSideMenu() { dom.sideMenu.classList.add('active'); dom.menuOverlay.classList.add('active'); }
+function closeSideMenu() { dom.sideMenu.classList.remove('active'); dom.menuOverlay.classList.remove('active'); }
 
 function bindEvents() {
     dom.menuToggle.onclick = openSideMenu;
     dom.menuClose.onclick = closeSideMenu;
     dom.menuOverlay.onclick = closeSideMenu;
     dom.helpBtn.onclick = () => showPopup('tutorial');
-    
     dom.soundToggle.onclick = () => {
         State.isMuted = !State.isMuted;
         dom.soundToggle.textContent = State.isMuted ? '🔇' : '🔊';
-        dom.soundToggle.setAttribute('aria-label', State.isMuted ? 'Activar sonido' : 'Desactivar sonido');
     };
-
-    dom.resetAll.onclick = () => {
-        if (confirm('¿Borrar todos tus récords?')) {
-            localStorage.clear();
-            location.reload();
-        }
-    };
-
+    dom.resetAll.onclick = () => { if(confirm('¿Borrar récords?')){ localStorage.clear(); location.reload(); }};
+    
     document.querySelectorAll('.accordion-header').forEach(h => {
         h.onclick = () => {
             h.classList.toggle('active');
@@ -307,11 +286,5 @@ function bindEvents() {
         };
     });
 }
-
-// EXPOSICIÓN MANUAL: Esto saca la función al exterior
-window.debugWin = () => showPopup('victory');
-
-// Auto-ejecución al cargar para no tener que escribir nada
-setTimeout(() => window.debugWin(), 500);
 
 bootstrap();
