@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Memory Game - Learn English</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -12,52 +13,50 @@
 <div class="app-container">
     <header class="header">
         <div class="header-main">
-            <button id="menu-toggle" class="menu-btn">☰</button>
+            <button id="menu-toggle" class="menu-btn" aria-label="Abrir menú">☰</button>
+
             <h1 class="main-title">MEMORY</h1>
+
             <div class="header-stats">
                 <div class="mini-stat"><span id="timer">00:00</span></div>
                 <div class="mini-stat"><span id="moves">0</span></div>
             </div>
-            <button id="help-btn" class="help-btn">?</button>
+
+            <div class="header-actions">
+                <button id="sound-toggle" class="sound-btn" aria-label="Desactivar sonido">🔊</button>
+                <button id="help-btn" class="help-btn" aria-label="Ayuda">?</button>
+            </div>
         </div>
 
-        <nav id="side-menu" class="side-menu">
+        <nav id="side-menu" class="side-menu" aria-hidden="true">
             <div class="menu-overlay" id="menu-overlay"></div>
             <div class="menu-drawer">
                 <div class="menu-header">
                     <span class="menu-title">MENÚ</span>
                     <button id="menu-close" class="close-btn">×</button>
                 </div>
-                
                 <div class="menu-scroll-area">
                     <div class="accordion-item">
-                        <button class="accordion-header" data-target="cat-nav">
-                            CATEGORÍAS <span class="arrow">▼</span>
-                        </button>
+                        <button class="accordion-header" data-target="cat-nav">CATEGORÍAS ▼</button>
                         <div id="cat-nav" class="accordion-content nav-categories"></div>
                     </div>
-
                     <div class="accordion-item">
-                        <button class="accordion-header" data-target="score-panel">
-                            MIS RÉCORDS <span class="arrow">▼</span>
-                        </button>
+                        <button class="accordion-header" data-target="score-panel">MIS RÉCORDS ▼</button>
                         <div id="score-panel" class="accordion-content score-list"></div>
                     </div>
                 </div>
-
                 <div class="menu-footer">
-                    <button id="reset-panel-btn" class="btn-action secondary">REPETIR ESTE PANEL</button>
-                    <button id="reset-all-btn" class="btn-action danger">EMPEZAR DESDE CERO</button>
+                    <button id="reset-panel-btn" class="btn-action secondary">REPETIR PANEL</button>
+                    <button id="reset-all-btn" class="btn-action danger">BORRAR TODO</button>
                 </div>
             </div>
         </nav>
     </header>
 
-    <main class="game-area" id="main-area">
+    <main class="game-area">
         <div id="game-board" class="board-grid"></div>
         <div id="global-shine"></div>
         <div id="sparkles-container"></div>
-
         <div id="modal-overlay" class="modal-overlay">
             <div id="modal-content" class="modal-content"></div>
         </div>
@@ -68,7 +67,7 @@
             <span id="feedback-text">¡Go!</span>
             <span id="pairs-count">0/0</span>
         </div>
-        <div class="progress-track">
+        <div id="progress-track" class="progress-track">
             <div id="progress-bar" class="progress-fill"></div>
         </div>
     </footer>

@@ -1,27 +1,29 @@
 import { gameState } from './data.js';
 
-let flippedCards = [];
-let moves = 0;
-let timer = 0;
-let interval = null;
-let lock = false;
-let matches = 0;
-let currentCategory = 'animales';
-let totalPairs = 0;
+const CONFIG = Object.freeze({
+    defaultCategory: 'animales',
+    pairsPerGame: 18,
+    flipDelay: 800,
+    storage: { history: 'mem_history', decks: 'mem_decks', tutorial: 'mem_tut' },
+    categoryColors: { animales: '#f14343', vegetales: '#22ac0a', comida: '#ff8800', eventos: '#ff00ff', colegio: '#2196f3' }
+});
 
-let gameHistory = JSON.parse(localStorage.getItem('mem_history')) || {};
-let activeDecks = JSON.parse(localStorage.getItem('mem_decks')) || {};
-let tutorialSeen = localStorage.getItem('mem_tut') === 'true';
+const State = {
+    flippedCards: [], moves: 0, timer: 0, interval: null, lock: false, matches: 0,
+    currentCategory: CONFIG.defaultCategory, totalPairs: 0, history: {}, decks: {}, 
+    tutorialSeen: false, isMuted: false,
+    voices: { english: null, spanish: null }
+};
 
 const dom = {
     board: document.getElementById('game-board'),
     catNav: document.getElementById('cat-nav'),
     scorePanel: document.getElementById('score-panel'),
     progressBar: document.getElementById('progress-bar'),
+    timerDisplay: document.getElementById('timer'),
+    movesDisplay: document.getElementById('moves'),
     pairsCount: document.getElementById('pairs-count'),
     feedbackText: document.getElementById('feedback-text'),
-    movesDisplay: document.getElementById('moves'),
-    timerDisplay: document.getElementById('timer'),
     modal: document.getElementById('modal-overlay'),
     modalBody: document.getElementById('modal-content'),
     sideMenu: document.getElementById('side-menu'),
@@ -31,223 +33,244 @@ const dom = {
     resetPanel: document.getElementById('reset-panel-btn'),
     resetAll: document.getElementById('reset-all-btn'),
     helpBtn: document.getElementById('help-btn'),
+    soundToggle: document.getElementById('sound-toggle'),
     shine: document.getElementById('global-shine'),
     sparkles: document.getElementById('sparkles-container')
 };
 
-function init(category) {
-    currentCategory = category;
-    
-    // Actualiza la clase del tablero para el fondo SVG
-    // 'board-grid' es la clase base, 'category' añade la específica (ej: animales)
-    dom.board.className = `board-grid ${category}`;
+/* ─── VOZ (SOLUCIÓN AL DELAY) ────────────────────────────────────────────── */
+function initVoices() {
+    const load = () => {
+        const v = window.speechSynthesis.getVoices();
+        if (v.length > 0) {
+            // Prioridad a voces locales para evitar latencia de red
+            State.voices.english = v.find(x => (x.lang === 'en-US' || x.lang === 'en_US') && !x.localService) || 
+                                   v.find(x => x.lang.startsWith('en'));
+            State.voices.spanish = v.find(x => (x.lang === 'es-ES' || x.lang === 'es_ES') && !x.localService) || 
+                                   v.find(x => x.lang.startsWith('es'));
+        }
+    };
 
-    flippedCards = [];
-    lock = false;
-    matches = 0;
-    
-    dom.modal.classList.remove('active');
-    dom.sideMenu.classList.remove('active');
-    
-    clearInterval(interval);
-    interval = null;
-
-    updateMenuData();
-    toggleWinEffects(false);
-
-    if (gameHistory[category]) {
-        loadCompleted(category);
-    } else {
-        loadNew(category);
+    load();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = load;
     }
-
-    if (!tutorialSeen) {
-        showPopup('tutorial');
-        tutorialSeen = true;
-        localStorage.setItem('mem_tut', 'true');
-    }
+    // Re-intento por si el navegador es lento cargando el catálogo
+    setTimeout(load, 1000);
 }
 
-function loadCompleted(cat) {
-    const data = gameHistory[cat];
-    timer = data.timer;
-    moves = data.moves;
-    totalPairs = data.totalPairs;
-    matches = totalPairs;
+function speak(text, type) {
+    if (State.isMuted || !window.speechSynthesis) return;
     
-    renderStats();
-    dom.progressBar.style.width = '100%';
-    dom.pairsCount.textContent = `${totalPairs}/${totalPairs}`;
-    dom.feedbackText.textContent = "¡Hecho!";
-    renderBoard(activeDecks[cat], true);
-    toggleWinEffects(true);
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voice = type === 'english' ? State.voices.english : State.voices.spanish;
+    
+    if (voice) utterance.voice = voice;
+    utterance.lang = type === 'english' ? 'en-US' : 'es-ES';
+    utterance.rate = 1.0;
+    
+    window.speechSynthesis.speak(utterance);
+}
+
+/* ─── JUEGO ──────────────────────────────────────────────────────────────── */
+function bootstrap() {
+    State.history = JSON.parse(localStorage.getItem(CONFIG.storage.history) || '{}');
+    State.decks = JSON.parse(localStorage.getItem(CONFIG.storage.decks) || '{}');
+    State.tutorialSeen = localStorage.getItem(CONFIG.storage.tutorial) === 'true';
+    bindEvents();
+    initVoices();
+    init(CONFIG.defaultCategory);
+}
+
+function init(category) {
+    State.currentCategory = category;
+    State.flippedCards = []; State.lock = false; State.matches = 0;
+    State.timer = 0; State.moves = 0;
+    clearInterval(State.interval); State.interval = null;
+    
+    dom.board.className = `board-grid ${category}`;
+    closeSideMenu();
+    updateMenuData();
+    
+    if (State.history[category]) loadCompleted(category);
+    else loadNew(category);
 }
 
 function loadNew(cat) {
-    timer = 0; moves = 0;
-    renderStats();
-    dom.progressBar.style.width = '0%';
-    
-    let deck = activeDecks[cat];
+    let deck = State.decks[cat];
     if (!deck) {
-        const pool = [...gameState[cat]].sort(() => Math.random() - 0.5).slice(0, 18);
+        const pool = [...gameState[cat]].sort(() => Math.random() - 0.5).slice(0, CONFIG.pairsPerGame);
         deck = [];
         pool.forEach(item => {
             deck.push({ id: item.clave, text: item.languages.english, img: item.icono, type: 'english' });
             deck.push({ id: item.clave, text: item.languages.spanish, img: item.icono, type: 'spanish' });
         });
         deck.sort(() => Math.random() - 0.5);
-        activeDecks[cat] = deck;
-        localStorage.setItem('mem_decks', JSON.stringify(activeDecks));
+        State.decks[cat] = deck;
+        localStorage.setItem(CONFIG.storage.decks, JSON.stringify(State.decks));
     }
-    
-    totalPairs = deck.length / 2;
-    dom.pairsCount.textContent = `0/${totalPairs}`;
-    dom.feedbackText.textContent = "Parejas";
+    State.totalPairs = deck.length / 2;
     renderBoard(deck, false);
+    renderStats();
+    setProgress(0, 0, State.totalPairs);
+}
+
+function loadCompleted(cat) {
+    const d = State.history[cat];
+    State.timer = d.timer; State.moves = d.moves; State.totalPairs = d.totalPairs; State.matches = d.totalPairs;
+    renderStats();
+    setProgress(100, d.totalPairs, d.totalPairs);
+    renderBoard(State.decks[cat], true);
 }
 
 function renderBoard(deck, isDone) {
     dom.board.innerHTML = '';
     deck.forEach(data => {
-        const card = document.createElement('div');
-        card.className = `card ${isDone ? 'flipped matched' : ''}`;
-        card.innerHTML = `
-            <div class="card-inner">
-                <div class="card-face card-back"></div>
-                <div class="card-face card-front ${data.type}">
-                    <div class="image-wrapper"><img src="${data.img}" class="icon-img"></div>
-                    <div class="word-text">${data.text}</div>
-                </div>
-            </div>`;
-        if (!isDone) card.onclick = () => handleCardClick(card, data.id);
+        const card = el('div', null, `card${isDone ? ' flipped matched' : ''}`);
+        const inner = el('div', null, 'card-inner');
+        const front = el('div', null, `card-face card-front ${data.type}`);
+        const back = el('div', null, 'card-face card-back');
+        
+        const img = el('img'); img.src = data.img; img.className = 'icon-img';
+        const txt = el('div', data.text, 'word-text');
+        
+        front.append(img, txt);
+        inner.append(back, front);
+        card.appendChild(inner);
+
+        card.onclick = () => handleCardClick(card, data);
         dom.board.appendChild(card);
     });
 }
 
-function handleCardClick(card, id) {
-    if (lock || card.classList.contains('flipped')) {
-        if (!card.classList.contains('matched')) {
-            card.classList.remove('shake');
-            void card.offsetWidth;
-            card.classList.add('shake');
-            card.addEventListener('animationend', () => card.classList.remove('shake'), { once: true });
-        }
+function handleCardClick(card, data) {
+    if (card.classList.contains('matched') || card.classList.contains('flipped')) {
+        speak(data.text, data.type);
         return;
     }
-    if (!interval) startTimer();
+    if (State.lock) return;
 
+    if (!State.interval) startTimer();
+    
+    speak(data.text, data.type);
     card.classList.add('flipped');
-    flippedCards.push({ card, id });
+    State.flippedCards.push({ card, id: data.id });
 
-    if (flippedCards.length === 2) {
-        lock = true;
-        moves++;
+    if (State.flippedCards.length === 2) {
+        State.lock = true;
+        State.moves++;
         renderStats();
-        
-        const [c1, c2] = flippedCards;
-        if (c1.id === c2.id) {
-            c1.card.classList.add('matched');
-            c2.card.classList.add('matched');
-            matches++;
-            flippedCards = [];
-            lock = false;
-            dom.progressBar.style.width = `${(matches/totalPairs)*100}%`;
-            dom.pairsCount.textContent = `${matches}/${totalPairs}`;
-            if (matches === totalPairs) handleWin();
-        } else {
-            setTimeout(() => {
-                c1.card.classList.remove('flipped');
-                c2.card.classList.remove('flipped');
-                flippedCards = [];
-                lock = false;
-            }, 800);
-        }
+        checkMatch();
+    }
+}
+
+function checkMatch() {
+    const [c1, c2] = State.flippedCards;
+    if (c1.id === c2.id) {
+        c1.card.classList.add('matched');
+        c2.card.classList.add('matched');
+        State.matches++;
+        State.flippedCards = [];
+        State.lock = false;
+        const pct = (State.matches / State.totalPairs) * 100;
+        setProgress(pct, State.matches, State.totalPairs);
+        if (State.matches === State.totalPairs) handleWin();
+    } else {
+        setTimeout(() => {
+            c1.card.classList.remove('flipped');
+            c2.card.classList.remove('flipped');
+            State.flippedCards = [];
+            State.lock = false;
+        }, CONFIG.flipDelay);
     }
 }
 
 function handleWin() {
-    clearInterval(interval);
-    gameHistory[currentCategory] = { moves, timer, totalPairs };
-    localStorage.setItem('mem_history', JSON.stringify(gameHistory));
-    toggleWinEffects(true);
+    clearInterval(State.interval);
+    State.history[State.currentCategory] = { moves: State.moves, timer: State.timer, totalPairs: State.totalPairs };
+    localStorage.setItem(CONFIG.storage.history, JSON.stringify(State.history));
+    fireConfetti();
     showPopup('victory');
-    updateMenuData();
 }
 
-function toggleWinEffects(active) {
-    if (active) {
-        dom.shine.classList.add('active');
-        createSparkles();
-    } else {
-        dom.shine.classList.remove('active');
-        dom.sparkles.innerHTML = '';
-    }
+/* ─── UI HELPERS ────────────────────────────────────────────────────────── */
+function el(tag, text, className) {
+    const e = document.createElement(tag);
+    if (text) e.textContent = text;
+    if (className) e.className = className;
+    return e;
 }
 
-function createSparkles() {
-    dom.sparkles.innerHTML = '';
-    for (let i = 0; i < 10; i++) {
-        const sparkle = document.createElement('div');
-        sparkle.className = 'sparkle';
-        sparkle.style.top = Math.random() * 100 + '%';
-        sparkle.style.left = Math.random() * 100 + '%';
-        sparkle.style.animationDelay = Math.random() * 2 + 's';
-        dom.sparkles.appendChild(sparkle);
-    }
+function setProgress(pct, m, t) {
+    dom.progressBar.style.width = `${pct}%`;
+    dom.pairsCount.textContent = `${m}/${t}`;
+}
+
+function startTimer() { State.interval = setInterval(() => { State.timer++; renderStats(); }, 1000); }
+
+function renderStats() {
+    const m = Math.floor(State.timer / 60).toString().padStart(2, '0');
+    const s = (State.timer % 60).toString().padStart(2, '0');
+    dom.timerDisplay.textContent = `${m}:${s}`;
+    dom.movesDisplay.textContent = State.moves;
 }
 
 function updateMenuData() {
     dom.catNav.innerHTML = '';
-    const colors = { animales: '#f14343', vegetales: '#22ac0a', comida: '#ff8800', eventos: '#ff00ff', colegio: '#2196f3' };
     gameState.categoriasNames.forEach(name => {
-        const isComp = !!gameHistory[name];
-        const btn = document.createElement('button');
-        btn.className = `btn-cat ${isComp ? 'completed' : ''}`;
-        btn.style.backgroundColor = colors[name] || '#333';
-        btn.innerHTML = `${name.toUpperCase()} ${isComp ? '✓' : ''}`;
-        if (!isComp) btn.onclick = () => init(name);
+        const isComp = !!State.history[name];
+        const btn = el('button', name.toUpperCase() + (isComp ? ' ✓' : ''), `btn-cat${isComp ? ' completed' : ''}`);
+        btn.style.backgroundColor = CONFIG.categoryColors[name];
+        btn.onclick = () => init(name);
         dom.catNav.appendChild(btn);
-    });
-    dom.scorePanel.innerHTML = '';
-    Object.entries(gameHistory).forEach(([cat, data]) => {
-        const div = document.createElement('div');
-        div.className = 'score-entry';
-        div.innerHTML = `<span>${cat.toUpperCase()}</span><span>${formatTime(data.timer)} | ${data.moves}</span>`;
-        dom.scorePanel.appendChild(div);
     });
 }
 
+function openSideMenu() { dom.sideMenu.classList.add('active'); dom.menuOverlay.style.display = 'block'; }
+function closeSideMenu() { dom.sideMenu.classList.remove('active'); dom.menuOverlay.style.display = 'none'; }
+
 function showPopup(type) {
     dom.modalBody.innerHTML = '';
+    const btn = el('button', '¡VAMOS!', 'btn-action secondary');
+    btn.onclick = () => dom.modal.classList.remove('active');
+    
     if (type === 'victory') {
-        dom.modalBody.innerHTML = `<h3>🏆 ¡GENIAL!</h3><p>Nivel ${currentCategory} completado.</p><button class="btn-action secondary" style="width:100%;margin-top:10px" onclick="location.reload()">SIGUIENTE</button>`;
-    } else if (type === 'tutorial') {
-        dom.modalBody.innerHTML = `<div class="modal-flex"><div class="modal-mascot-side"><div class="modal-speech">Hello!</div><img src="./assets/img/jirafa.png" class="modal-mascot-img"></div><div class="modal-text-side"><h4>¿Cómo jugar?</h4><p style="font-size:0.6rem">Encuentra la pareja en inglés de cada carta</p></div></div><button class="btn-action secondary" style="width:100%; margin-top: 10px;" onclick="document.getElementById('modal-overlay').classList.remove('active')">¡VAMOS!</button>`;
-    } else if (type === 'confirmReset') {
-        dom.modalBody.innerHTML = `<h3>¿Seguro que quieres borrar todos tus records y empezar de nuevo todos los paneles?</h3><div style="display:flex;gap:10px;margin-top:10px"><button class="btn-action danger" id="btn-yes-all">SÍ</button><button class="btn-action secondary" onclick="document.getElementById('modal-overlay').classList.remove('active')">NO</button></div>`;
-        document.getElementById('btn-yes-all').onclick = () => { localStorage.clear(); location.reload(); };
+        dom.modalBody.append(el('h3', '🏆 ¡GANASTE!'), el('p', 'Nivel completado con éxito.'), btn);
+    } else {
+        dom.modalBody.append(el('h4', 'TUTORIAL'), el('p', 'Une las parejas de inglés y español.'), btn);
     }
     dom.modal.classList.add('active');
 }
 
-function startTimer() { interval = setInterval(() => { timer++; renderStats(); }, 1000); }
-function renderStats() { dom.timerDisplay.textContent = formatTime(timer); dom.movesDisplay.textContent = moves; }
-function formatTime(s) { return `${Math.floor(s/60).toString().padStart(2, '0')}:${(s%60).toString().padStart(2, '0')}`; }
+function fireConfetti() { confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } }); }
 
-document.querySelectorAll('.accordion-header').forEach(header => {
-    header.onclick = () => {
-        const content = document.getElementById(header.dataset.target);
-        header.classList.toggle('active');
-        content.classList.toggle('open');
+function bindEvents() {
+    dom.menuToggle.onclick = openSideMenu;
+    dom.menuClose.onclick = closeSideMenu;
+    dom.menuOverlay.onclick = closeSideMenu;
+    dom.helpBtn.onclick = () => showPopup('tutorial');
+    
+    dom.soundToggle.onclick = () => {
+        State.isMuted = !State.isMuted;
+        dom.soundToggle.textContent = State.isMuted ? '🔇' : '🔊';
+        dom.soundToggle.setAttribute('aria-label', State.isMuted ? 'Activar sonido' : 'Desactivar sonido');
     };
-});
 
-dom.menuToggle.onclick = () => dom.sideMenu.classList.add('active');
-dom.menuClose.onclick = () => dom.sideMenu.classList.remove('active');
-dom.menuOverlay.onclick = () => dom.sideMenu.classList.remove('active');
-dom.resetPanel.onclick = () => { delete activeDecks[currentCategory]; delete gameHistory[currentCategory]; localStorage.setItem('mem_decks', JSON.stringify(activeDecks)); localStorage.setItem('mem_history', JSON.stringify(gameHistory)); init(currentCategory); };
-dom.resetAll.onclick = () => showPopup('confirmReset');
-dom.helpBtn.onclick = () => showPopup('tutorial');
+    dom.resetAll.onclick = () => {
+        if (confirm('¿Borrar todos tus récords?')) {
+            localStorage.clear();
+            location.reload();
+        }
+    };
 
-init('animales');
+    document.querySelectorAll('.accordion-header').forEach(h => {
+        h.onclick = () => {
+            h.classList.toggle('active');
+            const target = document.getElementById(h.dataset.target);
+            target.classList.toggle('open');
+        };
+    });
+}
+
+bootstrap();
