@@ -318,10 +318,17 @@ body {
     cursor: pointer;
     transition: filter 0.15s, transform 0.1s;
 }
+.modal-btn-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
 .btn-action:hover  { filter: brightness(1.2); }
 .btn-action:active { transform: scale(0.96); filter: brightness(0.85); }
 .btn-action.danger    { background: var(--error); }
-.btn-action.secondary { background: var(--info); }
+.btn-action.secondary { background: var(--info);}
+.btn-action.primary.danger { background: var(--error);}
 
 /* ─── GAME AREA ──────────────────────────────────────────────────────────── */
 .game-area {
@@ -633,11 +640,10 @@ body {
     padding: 18px 30px;
     font-size: 1.1rem;
     font-weight: 900;
-    border-radius: 18px;
+    border-radius: 8px;
     width: 100%;
     cursor: pointer;
     transition: transform 0.2s, background 0.2s;
-    box-shadow: 0 8px 0 #388e3c; /* Efecto 3D en el botón */
 }
 
 .btn-action.primary:active {

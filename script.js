@@ -45,6 +45,7 @@ const dom = {
     menuClose: document.getElementById('menu-close'),
     menuOverlay: document.getElementById('menu-overlay'),
     resetAll: document.getElementById('reset-all-btn'),
+    resetPanel: document.getElementById('reset-panel-btn'), // Asegúrate de que este ID existe en tu HTML
     helpBtn: document.getElementById('help-btn'),
     soundToggle: document.getElementById('sound-toggle')
 };
@@ -170,30 +171,20 @@ function checkMatch() {
     }
 }
 
-/* ─── VICTORIA Y GUARDADO ───────────────────────────────────────────────── */
+/* ─── VICTORIA Y MODALES ────────────────────────────────────────────────── */
 function handleWin() {
     clearInterval(State.interval);
-    
     const finalTimeStr = dom.timerDisplay.textContent;
-
     State.history[State.currentCategory] = { 
         moves: State.moves, 
         timer: State.timer, 
         totalPairs: State.totalPairs,
         timeStr: finalTimeStr
     };
-    
     localStorage.setItem(CONFIG.storage.history, JSON.stringify(State.history));
-    
     if (typeof confetti === 'function') {
-        confetti({ 
-            particleCount: 200, 
-            spread: 90, 
-            origin: { y: 0.7 },
-            zIndex: 10000 
-        });
+        confetti({ particleCount: 200, spread: 90, origin: { y: 0.7 }, zIndex: 10000 });
     }
-    
     updateMenuData();
     showPopup('victory');
 }
@@ -202,25 +193,37 @@ function showPopup(type) {
     dom.modalBody.innerHTML = '';
     if (type === 'victory') {
         const imgCont = el('div', null, 'modal-image-container');
-        const img = el('img'); 
-        img.src = "./assets/img/jirafa.png"; 
+        const img = el('img'); img.src = "./assets/img/jirafa.png"; 
         imgCont.appendChild(img);
-
         const statsRow = el('div', null, 'modal-stats-row');
-        statsRow.append(
-            createStatItem('TIEMPO', dom.timerDisplay.textContent),
-            createStatItem('PASOS', State.moves.toString())
-        );
-
+        statsRow.append(createStatItem('TIEMPO', dom.timerDisplay.textContent), createStatItem('PASOS', State.moves.toString()));
         const btn = el('button', 'SIGUIENTE NIVEL', 'btn-action primary');
         btn.onclick = () => { dom.modal.classList.remove('active'); openSideMenu(); };
-
         dom.modalBody.append(imgCont, el('h2', '¡GENIAL!', 'modal-title'), el('p', 'Nivel completado', 'modal-subtitle'), statsRow, btn);
     } else {
         const btn = el('button', '¡VAMOS!', 'btn-action secondary');
         btn.onclick = () => dom.modal.classList.remove('active');
         dom.modalBody.append(el('h4', 'TUTORIAL', 'modal-title-small'), el('p', 'Une las parejas de inglés y español.', 'modal-text'), btn);
     }
+    dom.modal.classList.add('active');
+}
+
+// NUEVA FUNCIÓN PARA ALERTAS PERSONALIZADAS
+function showConfirmModal(title, message, onConfirm) {
+    dom.modalBody.innerHTML = '';
+    const btnContainer = el('div', null, 'modal-btn-group');
+    const confirmBtn = el('button', 'SÍ, BORRAR', 'btn-action primary danger');
+    const cancelBtn = el('button', 'CANCELAR', 'btn-action secondary');
+
+
+    cancelBtn.onclick = () => dom.modal.classList.remove('active');
+    confirmBtn.onclick = () => {
+        onConfirm();
+        dom.modal.classList.remove('active');
+    };
+
+    btnContainer.append(confirmBtn, cancelBtn);
+    dom.modalBody.append(el('h4', title, 'modal-title-small'), el('p', message, 'modal-text'), btnContainer);
     dom.modal.classList.add('active');
 }
 
@@ -255,12 +258,10 @@ function renderStats() {
 function updateRecordsList() {
     dom.scorePanel.innerHTML = '';
     const records = Object.entries(State.history);
-    
     if (records.length === 0) {
         dom.scorePanel.innerHTML = '<p class="empty-msg">Aún no tienes récords</p>';
         return;
     }
-
     records.forEach(([cat, data]) => {
         let displayTime = data.timeStr;
         if (!displayTime && data.timer !== undefined) {
@@ -268,12 +269,8 @@ function updateRecordsList() {
             const s = (data.timer % 60).toString().padStart(2, '0');
             displayTime = `${m}:${s}`;
         }
-
         const row = el('div', null, 'score-row');
-        row.innerHTML = `
-            <span class="score-cat">${cat}</span>
-            <span class="score-data">⏱ ${displayTime || '--:--'} | 👟 ${data.moves || 0}</span>
-        `;
+        row.innerHTML = `<span class="score-cat">${cat}</span><span class="score-data">⏱ ${displayTime || '--:--'} | 👟 ${data.moves || 0}</span>`;
         dom.scorePanel.appendChild(row);
     });
 }
@@ -293,6 +290,7 @@ function updateMenuData() {
 function openSideMenu() { dom.sideMenu.classList.add('active'); dom.menuOverlay.classList.add('active'); }
 function closeSideMenu() { dom.sideMenu.classList.remove('active'); dom.menuOverlay.classList.remove('active'); }
 
+/* ─── EVENTOS ────────────────────────────────────────────────────────────── */
 function bindEvents() {
     dom.menuToggle.onclick = openSideMenu;
     dom.menuClose.onclick = closeSideMenu;
@@ -302,7 +300,35 @@ function bindEvents() {
         State.isMuted = !State.isMuted;
         dom.soundToggle.textContent = State.isMuted ? '🔇' : '🔊';
     };
-    dom.resetAll.onclick = () => { if(confirm('¿Borrar récords?')){ localStorage.clear(); location.reload(); }};
+
+    // BORRAR TODO (Con modal nuevo)
+    dom.resetAll.onclick = () => {
+        showConfirmModal(
+            '¿BORRAR TODO?', 
+            'Se eliminarán todos tus récords y progresos permanentemente.', 
+            () => {
+                localStorage.clear();
+                location.reload();
+            }
+        );
+    };
+
+    // BORRAR PANEL ACTUAL (Con modal nuevo)
+    if (dom.resetPanel) {
+        dom.resetPanel.onclick = () => {
+            showConfirmModal(
+                '¿REINICIAR PANEL?', 
+                `Se borrará el récord de "${State.currentCategory}".`, 
+                () => {
+                    delete State.history[State.currentCategory];
+                    delete State.decks[State.currentCategory];
+                    localStorage.setItem(CONFIG.storage.history, JSON.stringify(State.history));
+                    localStorage.setItem(CONFIG.storage.decks, JSON.stringify(State.decks));
+                    init(State.currentCategory);
+                }
+            );
+        };
+    }
     
     document.querySelectorAll('.accordion-header').forEach(h => {
         h.onclick = () => {
