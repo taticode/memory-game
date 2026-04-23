@@ -5,14 +5,26 @@ const CONFIG = Object.freeze({
     defaultCategory: 'animales',
     pairsPerGame: 18,
     flipDelay: 800,
-    storage: { history: 'mem_history', decks: 'mem_decks', tutorial: 'mem_tut' },
-    categoryColors: { animales: '#f14343', vegetales: '#22ac0a', comida: '#ff8800', eventos: '#ff00ff', colegio: '#2196f3' }
+    storage: { 
+        history: 'mem_history', 
+        decks: 'mem_decks', 
+        tutorial: 'mem_tut' 
+    },
+    categoryColors: { 
+        animales: '#f14343', 
+        vegetales: '#22ac0a', 
+        comida: '#ff8800', 
+        eventos: '#ff00ff', 
+        colegio: '#2196f3' 
+    }
 });
 
 /* ─── STATE ───────────────────────────────────────────────────────────────── */
 const State = {
     flippedCards: [], moves: 0, timer: 0, interval: null, lock: false, matches: 0,
-    currentCategory: CONFIG.defaultCategory, totalPairs: 0, history: {}, decks: {}, 
+    currentCategory: CONFIG.defaultCategory, totalPairs: 0, 
+    history: {}, 
+    decks: {}, 
     tutorialSeen: false, isMuted: false,
     voices: { english: null, spanish: null }
 };
@@ -26,7 +38,6 @@ const dom = {
     timerDisplay: document.getElementById('timer'),
     movesDisplay: document.getElementById('moves'),
     pairsCount: document.getElementById('pairs-count'),
-    feedbackText: document.getElementById('feedback-text'),
     modal: document.getElementById('modal-overlay'),
     modalBody: document.getElementById('modal-content'),
     sideMenu: document.getElementById('side-menu'),
@@ -163,17 +174,26 @@ function checkMatch() {
 function handleWin() {
     clearInterval(State.interval);
     
-    // Guardamos el récord con la ruta local restaurada
+    const finalTimeStr = dom.timerDisplay.textContent;
+
     State.history[State.currentCategory] = { 
         moves: State.moves, 
         timer: State.timer, 
         totalPairs: State.totalPairs,
-        timeStr: dom.timerDisplay.textContent
+        timeStr: finalTimeStr
     };
     
     localStorage.setItem(CONFIG.storage.history, JSON.stringify(State.history));
     
-    if (window.confetti) confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+    if (typeof confetti === 'function') {
+        confetti({ 
+            particleCount: 200, 
+            spread: 90, 
+            origin: { y: 0.7 },
+            zIndex: 10000 
+        });
+    }
+    
     updateMenuData();
     showPopup('victory');
 }
@@ -183,7 +203,7 @@ function showPopup(type) {
     if (type === 'victory') {
         const imgCont = el('div', null, 'modal-image-container');
         const img = el('img'); 
-        img.src = "./assets/img/jirafa.png"; // RUTA RESTAURADA
+        img.src = "./assets/img/jirafa.png"; 
         imgCont.appendChild(img);
 
         const statsRow = el('div', null, 'modal-stats-row');
@@ -242,10 +262,17 @@ function updateRecordsList() {
     }
 
     records.forEach(([cat, data]) => {
+        let displayTime = data.timeStr;
+        if (!displayTime && data.timer !== undefined) {
+            const m = Math.floor(data.timer / 60).toString().padStart(2, '0');
+            const s = (data.timer % 60).toString().padStart(2, '0');
+            displayTime = `${m}:${s}`;
+        }
+
         const row = el('div', null, 'score-row');
         row.innerHTML = `
             <span class="score-cat">${cat}</span>
-            <span class="score-data">⏱ ${data.timeStr} | 👟 ${data.moves}</span>
+            <span class="score-data">⏱ ${displayTime || '--:--'} | 👟 ${data.moves || 0}</span>
         `;
         dom.scorePanel.appendChild(row);
     });
@@ -260,7 +287,6 @@ function updateMenuData() {
         btn.onclick = () => init(name);
         dom.catNav.appendChild(btn);
     });
-    
     updateRecordsList(); 
 }
 
